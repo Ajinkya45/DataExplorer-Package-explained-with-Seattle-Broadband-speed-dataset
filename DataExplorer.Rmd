@@ -1,0 +1,292 @@
+---
+title: "DataExplorer Package for basic EDA"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+
+# Introduction
+```{r global options, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+
+DataExplorer is R package for exploratory data analysis. It helps to visualize data and create report from EDA.
+
+```{r Intro1}
+library(DataExplorer)
+library(rmarkdown)
+library(data.table)
+library(ggplot2)
+```
+```{r Intro2}
+speed = read.csv("C://Users/Ajinkya/Dropbox/Machine_Learning/Kaggle/seattle-broadband-speed-test/broadband-speed-test.csv", stringsAsFactors = FALSE)
+```
+
+# introduce
+
+it is a simple function which give basic statistics such as row and column number, number of discrete and continuous columns, total observations and missing value count.
+
+```{r Introduce}
+introduce(speed)
+```
+
+# plot_str
+
+This function helps to visualize data structure in network graph format.
+
+```{r str1, include=TRUE}
+plot_str(speed)
+```
+![alt text](https://raw.githubusercontent.com/Ajinkya45/DataExplorer-Package-explained-with-Seattle-Broadband-speed-dataset/master/Images/plot_str_1.jpeg "str plot diagonal")
+
+Default plot type is diagonal. Other plot type is Radial.
+```{r str2, include=TRUE}
+plot_str(speed, type = "radial")
+```
+![alt text](https://raw.githubusercontent.com/Ajinkya45/DataExplorer-Package-explained-with-Seattle-Broadband-speed-dataset/master/Images/plot_str_2.jpeg "str plot radial")
+
+# drop_columns
+
+As name suggest, this function is used to remove columns from dataset. for data.table object, drop_columns performs inline operation. it removes column from data.table object and assign it back to original dataset.
+```{r drop_column1}
+speed_copy = data.table(speed)
+drop_columns(speed_copy, "seattle_blkgrpce10")
+colnames(speed_copy)
+```
+In case of data frame object (other than data.table object) this function returns data frame after removing mentioned columns.
+```{r drop_column2}
+speed_v1 = drop_columns(speed, c("id", "timestamp", "seattle_blkgrpce10"))
+colnames(speed)
+```
+
+# plot_missing
+
+it returns count of missing value per variable as bar plot
+
+```{r plot_missing}
+plot_missing(speed_v1,
+             theme_config = list("plot.background" = element_rect(fill = "beige"),
+                                     "panel.background" = element_rect(fill = "beige")))
+```
+
+# set_missing
+
+It helps to set missing values.
+We can set values to several column together while ignoring other.
+```{r set_missing1}
+speed_v1 = set_missing(speed_v1, 
+                       as.integer(mean(c(speed$advertised_download,speed$advertised_upload),
+                                           na.rm = TRUE, trim=0.01)),
+                    exclude = c('min_rtt', 'actual_download'))
+plot_missing(speed_v1)
+```
+i replace null values in 'advertised_download' and 'advertised_upload' column with mean of both columns combined (ignored 1% of outlier values on both side)
+
+```{r set_missing2}
+speed_v1 = set_missing(speed_v1,as.integer(mean(speed$min_rtt,trim=0.01,na.rm=TRUE)),
+                    exclude='actual_download')
+speed_v1 = set_missing(speed_v1,as.integer(mean(speed$actual_download,trim=0.01,na.rm=TRUE)))
+plot_missing(speed_v1)
+```
+
+# group_category
+
+This function helps to group categories of discrete variable with very few observations.
+```{r group1}
+unique(speed_v1$cost_of_service)
+```
+cost of service column has 5 categories.
+```{r group2}
+sort(table(speed_v1$cost_of_service), decreasing=TRUE)
+```
+category "dont know" and "less_than_25" combined has 478 observations which is 11% of observation. if we want to combine these two categories for our analysis then we can use group_category function.
+
+```{r group3}
+speed_merge_cat <- group_category(data=speed_v1, feature = "cost_of_service", threshold = 0.11,                                           category_name = "0_25", update = TRUE)
+sort(table(speed_merge_cat$cost_of_service), decreasing=TRUE)
+```
+above mentioned two categories are merged and created new category named "0_25"
+
+# plot_boxplot
+
+to plot boxplot of all variables.
+
+```{r boxplot}
+plot_boxplot(speed_v1[c('actual_download','actual_upload','advertised_download', 
+                        'advertised_upload', 'min_rtt', 'connection_type')], 
+             by="connection_type",
+             theme_config = list("plot.background" = element_rect(fill = "beige"),
+                             "panel.background" = element_rect(fill = "beige")))
+```
+
+We can see that there are very few high values for 'advertised download', 'advertised upload', and 'min_rtt'. I drop those values and plot boxplot again
+
+```{r}
+# dataframe dimension befor dropping observations
+dim(speed_v1)
+```
+```{r}
+speed_v1 <- speed_v1[!((speed_v1['advertised_download'] > 100000) | 
+                     (speed_v1['advertised_upload'] > 100000) | (speed_v1['min_rtt'] > 100000)),]
+dim(speed_v1)
+```
+
+```{r}
+plot_boxplot(speed_v1[c('actual_download','actual_upload','advertised_download',
+                        'advertised_upload', 'min_rtt', 'connection_type')], by="connection_type",
+             theme_config = list("plot.background" = element_rect(fill = "beige"),
+                             "panel.background" = element_rect(fill = "beige")))
+```
+
+# plot_correlation 
+
+to plot correlation heatmap
+
+```{r correlation}
+plot_correlation(speed_v1, type = "d",
+                 theme_config = list("plot.background" = element_rect(fill = "beige"),
+                                     "panel.background" = element_rect(fill = "beige"),
+                                     "axis.text.x" = element_text(angle = 90)))
+```
+
+you can pass "all", "continuous", "discrete" to type variable
+
+# plot_bar
+
+creates frequency bar chart for discrete variables.
+
+```{r bar1}
+plot_bar(speed_v1)
+```
+
+by default it plots for variable with 50 categories. But we can change that with maxcat parameter. we can also apply different ggplot themes using ggtheme parameter.
+
+```{r bar2}
+plot_bar(speed_v1, maxcat = 5,
+         theme_config = list("plot.background" = element_rect(fill = "beige"),
+                             "panel.background" = element_rect(fill = "beige")))
+```
+
+
+# plot_density
+
+it plots density distribution of all continuous variables.
+
+```{r density}
+plot_density(speed_v1,
+             theme_config = list("plot.background" = element_rect(fill = "beige"),
+                                     "panel.background" = element_rect(fill = "beige")))
+```
+
+# plot_histogram
+
+plots histogram for continuous variables
+
+```{r hist}
+plot_histogram(speed_v1,
+               theme_config = list("plot.background" = element_rect(fill = "beige"),
+                                     "panel.background" = element_rect(fill = "beige")))
+```
+
+# plot_scatterplot
+
+This function plots scatterplot by fixing one axis to one perticular variable in dataset.
+```{r scatter}
+plot_scatterplot(speed_v1, by="connection_type")
+```
+
+# plot_prcomp
+
+this function plot output of prcomp
+```{r prcomp1}
+plot_prcomp(speed_v1)
+```
+
+Parameter variance_cap helps to decide which principal components to plot. Default value for this is 80% which means it plots principal components which explain 80% cumulative variation in dataset. If you want to see all principal components then put variance_cap = 1.
+
+```{r prcomp2}
+plot_prcomp(speed_v1, variance_cap = 1, 
+            theme_config = list("plot.background" = element_rect(fill = "beige"),
+                                     "panel.background" = element_rect(fill = "beige")))
+```
+
+# split_columns
+This function divides dataset by column type into 2 different data.table objects i.e. discrete and continuous. If column type is numeric then it is continuous.
+
+```{r split_column1}
+output = split_columns(speed_v1)
+```
+```{r split_column2}
+str(output$discrete)
+```
+```{r split_column3}
+str(output$continuous)
+```
+
+it also gives count of columns with all missing values.
+```{r split_column4}
+print(output$num_all_missing)
+```
+
+# dummify
+
+similar to one hot encoding. Convert each category to binary column.
+
+```{r dummify1}
+str(speed_v1)
+```
+```{r dummify2}
+speed_dummy = dummify(speed_v1, maxcat = 10)
+colnames(speed_dummy)
+```
+
+maxcat is maximum categories allowed. if there is column with more than 10 discrete values then it will be ignored. Default value for maxcat is 50.
+
+# create_report
+
+This function summerizes all above functions in nice report format.
+```{r report1, eval=FALSE}
+create_report(speed)
+```
+[Report](https://github.com/Ajinkya45/DataExplorer-Package-explained-with-Seattle-Broadband-speed-dataset/blob/master/Reports/report_v1.pdf)
+
+This is first report with no data processing steps applied.
+By default create_report function provides basic dataset statistics such as **row and column count**, **missing data count**, **name and data types of columns**, **univariate plot of each variable**, **correlation analysis** and **principle component analysis**.
+Great thing about this package is that you can customize this report as per your need. config paramaeter in function allows you to keep only those analysis of dataset which you want in your report.
+Default config setting:
+```{r report2,  , eval=FALSE}
+config <- list(
+"introduce" = list(),
+"plot_str" = list(
+"type" = "diagonal",
+"fontSize" = 35,
+"width" = 1000,
+"margin" = list("left" = 350, "right" = 250)
+),
+"plot_missing" = list(),
+"plot_histogram" = list(),
+"plot_bar" = list(),
+"plot_correlation" = list("use" = "pairwise.complete.obs"),
+"plot_prcomp" = list(),
+"plot_boxplot" = list(),
+"plot_scatterplot" = list()
+)
+```
+
+```{r report3, eval=FALSE}
+create_report(speed_v1, output_file = "report.html", output_dir = getwd(), y="connection_type",
+              config = list("introduce" = list(),
+                                   "plot_str" = list("type" = "radial",
+                                                     "fontSize" = 35,
+                                                     "width" = 1000,
+                                                     "margin" = list("left" = 350, "right" = 250)
+                                                     ),
+                                   "plot_missing" = list(),
+                                   "plot_correlation" = list()
+                                   ),
+              html_document(toc = TRUE, toc_depth = 6, theme = "united")
+              )
+```
+[Report](https://github.com/Ajinkya45/DataExplorer-Package-explained-with-Seattle-Broadband-speed-dataset/blob/master/Reports/report_v2.pdf)
